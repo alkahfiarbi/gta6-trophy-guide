@@ -1,0 +1,123 @@
+/* Leonida Platinum Guide — paper look, light by default, night theme optional. */
+:root {
+  --bg: #f6f3ee;
+  --card: #ffffff;
+  --ink: #1d2129;
+  --muted: #626a75;
+  --line: #ddd6c9;
+  --accent: #d24e2a;
+  --accent-soft: #fbe9e2;
+  --gold: #b8860b;
+  --silver: #6b7280;
+  --bronze: #8c5a2b;
+  --platinum: #3f6d8e;
+  --good: #2e7d32;
+}
+body.night {
+  --bg: #191a1e;
+  --card: #232529;
+  --ink: #ece7dd;
+  --muted: #a8a29a;
+  --line: #3a3d44;
+  --accent: #e86a45;
+  --accent-soft: #3a2a24;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+body, input, select, button, textarea { font-family: Georgia, "Times New Roman", serif; }
+.masthead { background: var(--card); border-bottom: 3px solid var(--accent); }
+.masthead-inner { max-width: 1080px; margin: 0 auto; padding: 22px 20px 18px; }
+.kicker { margin: 0 0 4px; color: var(--accent); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; font-family: Arial, Helvetica, sans-serif; }
+h1 { margin: 0 0 6px; font-size: 38px; line-height: 1.1; }
+.subtitle { margin: 0 0 8px; color: var(--muted); font-size: 17px; max-width: 760px; }
+.makeup { margin: 0 0 12px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
+.progress-wrap { max-width: 760px; }
+.progress-bar { height: 14px; background: var(--line); border-radius: 7px; overflow: hidden; }
+.progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width .2s; }
+.progress-text { margin: 6px 0 0; font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; max-width: 1080px; margin: 0 auto; padding: 10px 20px 0; }
+.tabs a {
+  font-family: Arial, Helvetica, sans-serif; font-size: 15px; text-decoration: none;
+  color: var(--ink); background: var(--card); border: 1px solid var(--line);
+  border-bottom: none; border-radius: 8px 8px 0 0; padding: 8px 16px;
+}
+.tabs a.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.toolbar {
+  max-width: 1080px; margin: 0 auto; padding: 12px 20px;
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+  background: var(--card); border: 1px solid var(--line); border-top: none;
+}
+.toolbar input[type="search"] { flex: 1 1 240px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: 15px; }
+.tool { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.tool select { padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.check { font-family: Arial, Helvetica, sans-serif; font-size: 14px; display: flex; gap: 6px; align-items: center; }
+#theme-toggle { padding: 7px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); cursor: pointer; }
+main { max-width: 1080px; margin: 0 auto; padding: 16px 20px 30px; }
+h2 { font-size: 26px; margin: 6px 0 10px; }
+h3 { font-size: 20px; margin: 18px 0 8px; }
+p.lede { color: var(--muted); max-width: 760px; }
+.count-line { font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: var(--muted); }
+.grade-counts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 16px; }
+.grade-counts span { font-family: Arial, Helvetica, sans-serif; font-size: 13px; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 4px 12px; }
+.trophy-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.trophy-row {
+  display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; align-items: start;
+  background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+}
+.trophy-row.earned { border-color: var(--good); }
+.trophy-row input[type="checkbox"] { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--accent); }
+.trophy-row h3 { margin: 0 0 2px; font-size: 18px; }
+.trophy-row h3 a { color: var(--ink); text-decoration: none; }
+.trophy-row h3 a:hover { color: var(--accent); text-decoration: underline; }
+.trophy-row .desc { margin: 0 0 6px; color: var(--muted); }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; font-family: Arial, Helvetica, sans-serif; font-size: 12px; }
+.badge { border-radius: 4px; padding: 2px 8px; background: var(--accent-soft); color: var(--ink); }
+.badge.platinum { background: var(--platinum); color: #fff; }
+.badge.gold { background: var(--gold); color: #fff; }
+.badge.silver { background: var(--silver); color: #fff; }
+.badge.bronze { background: var(--bronze); color: #fff; }
+.badge.missable { background: #7b1f1f; color: #fff; }
+.badge.hidden-badge { background: #444; color: #fff; }
+.stepper { display: flex; gap: 6px; align-items: center; font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
+.stepper button { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); cursor: pointer; font-size: 16px; }
+.stepper .count { min-width: 64px; text-align: center; }
+.guide-pane { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+.guide-pane .desc { color: var(--muted); font-style: italic; }
+.guide-pane ol, .guide-pane ul { padding-left: 22px; }
+.guide-pane li { margin-bottom: 4px; }
+.sources { background: var(--accent-soft); border-radius: 8px; padding: 12px 14px; margin-top: 16px; }
+.sources h4 { margin: 0 0 6px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
+.sources p { margin: 4px 0; font-size: 14px; word-break: break-word; }
+.warn { background: #fdf3e7; border: 1px solid #e8b25a; border-radius: 8px; padding: 12px 14px; }
+body.night .warn { background: #33291a; }
+.phase { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+.phase h3 { margin-top: 0; }
+.mini-bar { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; margin: 6px 0; }
+.mini-fill { height: 100%; background: var(--accent); }
+.phase ul { margin: 8px 0 0; padding-left: 20px; }
+.phase li { margin-bottom: 3px; }
+.phase li.earned { color: var(--good); }
+.planner-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+.planner-card ol { margin: 8px 0 0; padding-left: 22px; }
+.planner-card li { margin-bottom: 6px; }
+.save-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.save-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.save-card h3 { margin-top: 0; }
+.btn { padding: 8px 14px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; font-size: 15px; margin-right: 8px; }
+.btn.ghost { background: var(--bg); color: var(--ink); border-color: var(--line); }
+textarea.notes { width: 100%; min-height: 80px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: 15px; }
+input[type="file"] { font-family: Arial, Helvetica, sans-serif; }
+.foot { max-width: 1080px; margin: 0 auto; padding: 0 20px 30px; color: var(--muted); font-size: 14px; }
+.back-link { font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
+@media (max-width: 640px) {
+  h1 { font-size: 28px; }
+  .trophy-row { grid-template-columns: 30px 1fr; }
+  .stepper { grid-column: 2; }
+}
