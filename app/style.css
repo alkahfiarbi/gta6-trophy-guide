@@ -1,4 +1,5 @@
-/* Leonida Platinum Guide — paper look, light by default, night theme optional. */
+/* Leonida Platinum Guide v2 — paper look, light by default, night theme optional.
+   All colour comes from CSS variables; no images, no web fonts, no network. */
 :root {
   --bg: #f6f3ee;
   --card: #ffffff;
@@ -12,15 +13,18 @@
   --bronze: #8c5a2b;
   --platinum: #3f6d8e;
   --good: #2e7d32;
+  --warn-bg: #fdf3e7;
+  --warn-line: #e8b25a;
 }
 body.night {
-  --bg: #191a1e;
-  --card: #232529;
+  --bg: #14161b;
+  --card: #1f2228;
   --ink: #ece7dd;
   --muted: #a8a29a;
   --line: #3a3d44;
   --accent: #e86a45;
   --accent-soft: #3a2a24;
+  --warn-bg: #33291a;
 }
 * { box-sizing: border-box; }
 body {
@@ -36,8 +40,15 @@ body, input, select, button, textarea { font-family: Georgia, "Times New Roman",
 .masthead-inner { max-width: 1080px; margin: 0 auto; padding: 22px 20px 18px; }
 .kicker { margin: 0 0 4px; color: var(--accent); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; font-family: Arial, Helvetica, sans-serif; }
 h1 { margin: 0 0 6px; font-size: 38px; line-height: 1.1; }
+h1 .v2 { font-size: 20px; color: var(--accent); vertical-align: middle; font-family: Arial, Helvetica, sans-serif; }
 .subtitle { margin: 0 0 8px; color: var(--muted); font-size: 17px; max-width: 760px; }
-.makeup { margin: 0 0 12px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
+.makeup { margin: 0 0 10px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
+.audit {
+  font-family: Arial, Helvetica, sans-serif; font-size: 13px;
+  background: var(--accent-soft); border: 1px solid var(--accent);
+  border-radius: 8px; padding: 8px 12px; margin: 0 0 12px; max-width: 760px;
+}
+.audit b { color: var(--accent); }
 .progress-wrap { max-width: 760px; }
 .progress-bar { height: 14px; background: var(--line); border-radius: 7px; overflow: hidden; }
 .progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width .2s; }
@@ -46,7 +57,7 @@ h1 { margin: 0 0 6px; font-size: 38px; line-height: 1.1; }
 .tabs a {
   font-family: Arial, Helvetica, sans-serif; font-size: 15px; text-decoration: none;
   color: var(--ink); background: var(--card); border: 1px solid var(--line);
-  border-bottom: none; border-radius: 8px 8px 0 0; padding: 8px 16px;
+  border-bottom: none; border-radius: 8px 8px 0 0; padding: 8px 14px;
 }
 .tabs a.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .toolbar {
@@ -54,7 +65,7 @@ h1 { margin: 0 0 6px; font-size: 38px; line-height: 1.1; }
   display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
   background: var(--card); border: 1px solid var(--line); border-top: none;
 }
-.toolbar input[type="search"] { flex: 1 1 240px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: 15px; }
+.toolbar input[type="search"] { flex: 1 1 220px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font-size: 15px; }
 .tool { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
 .tool select { padding: 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 .check { font-family: Arial, Helvetica, sans-serif; font-size: 14px; display: flex; gap: 6px; align-items: center; }
@@ -62,7 +73,7 @@ h1 { margin: 0 0 6px; font-size: 38px; line-height: 1.1; }
 main { max-width: 1080px; margin: 0 auto; padding: 16px 20px 30px; }
 h2 { font-size: 26px; margin: 6px 0 10px; }
 h3 { font-size: 20px; margin: 18px 0 8px; }
-p.lede { color: var(--muted); max-width: 760px; }
+p.lede { color: var(--muted); max-width: 780px; }
 .count-line { font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: var(--muted); }
 .grade-counts { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 16px; }
 .grade-counts span { font-family: Arial, Helvetica, sans-serif; font-size: 13px; background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 4px 12px; }
@@ -85,18 +96,26 @@ p.lede { color: var(--muted); max-width: 760px; }
 .badge.bronze { background: var(--bronze); color: #fff; }
 .badge.missable { background: #7b1f1f; color: #fff; }
 .badge.hidden-badge { background: #444; color: #fff; }
+.badge.effort { background: var(--card); border: 1px solid var(--line); }
 .stepper { display: flex; gap: 6px; align-items: center; font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
 .stepper button { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); cursor: pointer; font-size: 16px; }
-.stepper .count { min-width: 64px; text-align: center; }
+.stepper .count { min-width: 70px; text-align: center; }
+.answer-box {
+  background: var(--accent-soft); border-left: 4px solid var(--accent);
+  border-radius: 0 8px 8px 0; padding: 12px 14px; margin: 12px 0;
+}
+.answer-box p { margin: 0; font-size: 17px; }
+.answer-box .src-tag { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: var(--accent); }
 .guide-pane { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
 .guide-pane .desc { color: var(--muted); font-style: italic; }
 .guide-pane ol, .guide-pane ul { padding-left: 22px; }
 .guide-pane li { margin-bottom: 4px; }
+.src-tag { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: var(--accent); white-space: nowrap; }
 .sources { background: var(--accent-soft); border-radius: 8px; padding: 12px 14px; margin-top: 16px; }
 .sources h4 { margin: 0 0 6px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
 .sources p { margin: 4px 0; font-size: 14px; word-break: break-word; }
-.warn { background: #fdf3e7; border: 1px solid #e8b25a; border-radius: 8px; padding: 12px 14px; }
-body.night .warn { background: #33291a; }
+.sources .url { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: var(--muted); }
+.warn { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 8px; padding: 12px 14px; }
 .phase { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
 .phase h3 { margin-top: 0; }
 .mini-bar { height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; margin: 6px 0; }
@@ -104,6 +123,18 @@ body.night .warn { background: #33291a; }
 .phase ul { margin: 8px 0 0; padding-left: 20px; }
 .phase li { margin-bottom: 3px; }
 .phase li.earned { color: var(--good); }
+.matrix-wrap { overflow-x: auto; margin: 12px 0; }
+table.matrix { border-collapse: collapse; font-family: Arial, Helvetica, sans-serif; font-size: 12px; }
+table.matrix th, table.matrix td { border: 1px solid var(--line); padding: 4px 7px; text-align: center; }
+table.matrix th:first-child, table.matrix td:first-child { text-align: left; min-width: 210px; }
+table.matrix td.hit { background: var(--accent-soft); color: var(--accent); font-weight: bold; }
+.dispute { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+.dispute h4 { margin: 0 0 6px; font-size: 16px; }
+.dispute p { margin: 4px 0; font-size: 15px; }
+.dispute .call { font-weight: bold; }
+.source-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.source-list li { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 15px; }
+.source-list .url { font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: var(--muted); word-break: break-all; }
 .planner-card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
 .planner-card ol { margin: 8px 0 0; padding-left: 22px; }
 .planner-card li { margin-bottom: 6px; }
@@ -116,6 +147,7 @@ textarea.notes { width: 100%; min-height: 80px; padding: 8px; border: 1px solid 
 input[type="file"] { font-family: Arial, Helvetica, sans-serif; }
 .foot { max-width: 1080px; margin: 0 auto; padding: 0 20px 30px; color: var(--muted); font-size: 14px; }
 .back-link { font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
+.pager { display: flex; justify-content: space-between; margin-top: 16px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; }
 @media (max-width: 640px) {
   h1 { font-size: 28px; }
   .trophy-row { grid-template-columns: 30px 1fr; }
