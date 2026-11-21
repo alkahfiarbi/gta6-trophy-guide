@@ -1,445 +1,429 @@
-// Leonida Platinum Guide v2 — offline GTA VI trophy tracker, vanilla JS, no libraries.
-// The data file (app/data/trophies.json) carries the 55 trophies, the dated source
-// registry, the audit counts and the disagreements log. This script renders the
-// checklist, guide panes, roadmap, missables, sources + matrix, planner and save
-// page. Progress lives in localStorage only; the app fetches nothing else and
-// makes no network request at run time.
+/* Leonida Platinum Guide v3 — offline GTA VI trophy guide & tracker.
+   Vanilla JS, no libraries, no network calls. Data lives in data/trophies.json. */
 (function () {
-'use strict';
-
-var STORE = 'gta6-trophy-guide-v2';
-var SEED_EARNED = [2, 3, 8, 10, 16, 20, 21, 33, 44, 46, 47, 51, 55];
-var SEED_COUNTS = { 15: 87, 35: 41, 42: 19, 31: 23, 52: 64000, 53: 41200 };
-var PHASES = [
-  { n: 1, name: 'Phase 1 — Story first', hours: '60–80 h', blurb: 'Play the story, and grab the one-time moments as they come. PowerPyx puts the story at 60–80 hours across five chapters; the trophy descriptions name Chapters 1–4 plus a final mission (see disagreement 2).', ids: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 33, 34, 37, 38, 39, 44, 45, 46, 47, 48, 49, 50, 51] },
-  { n: 2, name: 'Phase 2 — Strangers & side stories', hours: '≈10 h', blurb: 'Clear the stranger strands and side characters. Andy is Lucia-only; Tyrone and Bret are Jason-only.', ids: [20, 22, 23, 24, 25, 26, 27, 29] },
-  { n: 3, name: 'Phase 3 — Activities & exploration', hours: '≈25 h', blurb: 'Races, ranges, fishing, meditation, vehicles and the open map. Start the 100% checklist counts now — they already count.', ids: [15, 16, 17, 18, 19, 21, 28, 35, 41, 42, 43, 55] },
-  { n: 4, name: 'Phase 4 — Collectibles, grind & cleanup', hours: '≈100 h', blurb: 'Cards, WAiNK spots, money goals, the last combat trophies, and the 100% completion checklist — about 100 hours on its own. Then the platinum.', ids: [14, 30, 31, 32, 36, 40, 52, 53, 54, 1] }
-];
-var KIND_NAMES = { story: 'Story', mission: 'Mission', activity: 'Activity', collectible: 'Collectible', combat: 'Combat', coop: 'Co-op', exploration: 'Exploration', money: 'Money', side: 'Side', misc: 'Misc', completion: 'Completion', platinum: 'Platinum' };
-var DIFF_NAMES = { 1: 'Easy', 2: 'Easy', 3: 'Medium', 4: 'Hard', 5: 'Very hard' };
-
-var all = [];
-var sources = [];
-var disputes = [];
-var checkedOn = '2026-11-21';
-var state = readState();
-var view = document.getElementById('view');
-
-function blankState() {
-  return { earned: {}, progress: {}, notes: {}, hideSpoilers: true, theme: 'paper' };
-}
-function readState() {
-  try {
-    var raw = localStorage.getItem(STORE);
-    if (raw) {
-      var parsed = JSON.parse(raw);
-      if (parsed && typeof parsed === 'object') return merge(blankState(), parsed);
-    }
-  } catch (e) { /* bad storage: start empty */ }
-  return blankState();
-}
-function merge(base, over) {
-  var out = {};
-  var k;
-  for (k in base) out[k] = base[k];
-  for (k in over) out[k] = over[k];
-  return out;
-}
-function writeState() {
-  try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { /* storage full */ }
-}
-function demoSeed() {
-  var q = new URLSearchParams(window.location.search);
-  if (q.get('demo') !== '1') return;
-  if (Object.keys(state.earned).length || Object.keys(state.progress).length) return;
-  SEED_EARNED.forEach(function (id) { state.earned[id] = true; });
-  Object.keys(SEED_COUNTS).forEach(function (id) { state.progress[id] = SEED_COUNTS[id]; });
-  writeState();
-}
-function byId(id) {
-  for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
-  return null;
-}
-function srcById(id) {
-  for (var i = 0; i < sources.length; i++) if (sources[i].id === id) return sources[i];
-  return null;
-}
-function earned(t) { return !!state.earned[t.id]; }
-function countOf(t) { return state.progress[t.id] || 0; }
-function esc(s) {
-  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-function displayName(t) {
-  if (t.hidden && state.hideSpoilers && !earned(t)) return 'Hidden trophy — earn it to reveal its name';
-  return t.name;
-}
-function displayDesc(t) {
-  if (t.hidden && state.hideSpoilers && !earned(t)) return 'This trophy is hidden on PlayStation until it is earned. Its description is masked here.';
-  return t.description;
-}
-function starRow(n) {
-  var s = '';
-  for (var i = 1; i <= 5; i++) s += i <= n ? '★' : '☆';
-  return s;
-}
-function effortTag(t) {
-  return '<span class="badge effort">' + starRow(t.difficulty) + ' ' + (DIFF_NAMES[t.difficulty] || '') + ' · ' + esc(t.time || '') + '</span>';
-}
-function gradeTag(t) {
-  return '<span class="badge ' + esc(t.grade) + '">' + esc(t.grade) + '</span>';
-}
-function tagSet(t) {
-  var h = gradeTag(t);
-  h += '<span class="badge">' + esc(KIND_NAMES[t.kind] || t.kind) + '</span>';
-  h += effortTag(t);
-  h += '<span class="badge">Phase ' + t.phase + '</span>';
-  if (t.missable) h += '<span class="badge missable">MISSABLE</span>';
-  if (t.hidden) h += '<span class="badge hidden-badge">Hidden</span>';
-  return h;
-}
-function targetText(t) {
-  if (!t.target) return '';
-  var goal = t.target.count;
-  var unit = t.target.unit || '';
-  if (unit === '$') return '$' + countOf(t).toLocaleString('en-US') + ' / $' + goal.toLocaleString('en-US');
-  if (unit === '%') return countOf(t) + ' / ' + goal + '%';
-  return countOf(t) + ' / ' + goal + ' ' + esc(unit);
-}
-function stepper(t) {
-  if (!t.target) return '';
-  return '<div class="stepper"><button type="button" data-step="-1" data-id="' + t.id + '" aria-label="Decrease progress">−</button>' +
-    '<span class="count">' + esc(targetText(t)) + '</span>' +
-    '<button type="button" data-step="1" data-id="' + t.id + '" aria-label="Increase progress">+</button></div>';
-}
-function rowFor(t) {
-  var cls = earned(t) ? 'trophy-row earned' : 'trophy-row';
-  var chk = earned(t) ? ' checked' : '';
-  return '<li class="' + cls + '">' +
-    '<input type="checkbox" data-earn="' + t.id + '"' + chk + ' aria-label="Mark ' + esc(displayName(t)) + ' earned">' +
-    '<div><h3><a href="#/trophy/' + t.id + '">' + esc(displayName(t)) + '</a></h3>' +
-    '<p class="desc">' + esc(displayDesc(t)) + '</p>' +
-    '<div class="badges">' + tagSet(t) + '</div></div>' +
-    stepper(t) + '</li>';
-}
-function totalSteps() {
-  var n = 0;
-  all.forEach(function (t) { n += (t.steps || []).length; });
-  return n;
-}
-function paintAudit() {
-  var el = document.getElementById('audit-strip');
-  if (!el) return;
-  var withEffort = all.filter(function (t) { return t.difficulty && t.time; }).length;
-  el.innerHTML = '<b>AUDIT · checked ' + esc(checkedOn) + '</b> — ' + all.length + '/55 trophies named · ' +
-    totalSteps() + ' cited steps · ' + sources.length + ' dated sources · ' + disputes.length +
-    ' disagreements logged · difficulty + time on ' + withEffort + '/55 trophies';
-}
-function paintHeader() {
-  var done = all.filter(earned).length;
-  var total = all.length || 55;
-  var pct = total ? Math.round(done / total * 100) : 0;
-  document.getElementById('progress-fill').style.width = pct + '%';
-  document.getElementById('progress-text').textContent = done + ' / ' + total + ' earned (' + pct + '%)';
-  var got = { platinum: 0, gold: 0, silver: 0, bronze: 0 };
-  all.forEach(function (t) { if (earned(t)) got[t.grade]++; });
-  document.getElementById('makeup').textContent =
-    '55 trophies: 1 platinum, 2 gold, 6 silver, 46 bronze · 28 hidden until earned · ' +
-    'Earned by grade — Platinum ' + got.platinum + '/1, Gold ' + got.gold + '/2, Silver ' + got.silver + '/6, Bronze ' + got.bronze + '/46';
-  paintAudit();
-}
-function paintTheme() {
-  document.body.classList.toggle('night', state.theme === 'night');
-  document.getElementById('theme-toggle').textContent = state.theme === 'night' ? 'Paper theme' : 'Night theme';
-}
-function showChecklist() {
-  var q = (document.getElementById('search').value || '').toLowerCase();
-  var grade = document.getElementById('filter-grade').value;
-  var kind = document.getElementById('filter-kind').value;
-  var status = document.getElementById('filter-status').value;
-  var missOnly = document.getElementById('filter-missable').checked;
-  var list = all.filter(function (t) {
-    if (grade && t.grade !== grade) return false;
-    if (kind && t.kind !== kind) return false;
-    if (status === 'earned' && !earned(t)) return false;
-    if (status === 'unearned' && earned(t)) return false;
-    if (missOnly && !t.missable) return false;
-    if (q && t.name.toLowerCase().indexOf(q) === -1 && t.description.toLowerCase().indexOf(q) === -1) return false;
-    return true;
-  });
-  var got = { platinum: 0, gold: 0, silver: 0, bronze: 0 };
-  all.forEach(function (t) { if (earned(t)) got[t.grade]++; });
-  var missN = all.filter(function (t) { return t.missable; }).length;
-  view.innerHTML =
-    '<h2>Trophy checklist</h2>' +
-    '<p class="lede">Tick a trophy when you earn it. Counters track partial progress on trophies with a target. Every row shows its difficulty and estimated time; click a name for the cited guide, answer first.</p>' +
-    '<div class="grade-counts"><span>Platinum ' + got.platinum + ' / 1</span><span>Gold ' + got.gold + ' / 2</span><span>Silver ' + got.silver + ' / 6</span><span>Bronze ' + got.bronze + ' / 46</span><span>Hidden 28</span><span>Missable ' + missN + '</span><span>' + totalSteps() + ' cited steps</span><span>' + sources.length + ' sources</span></div>' +
-    '<p class="count-line">Showing ' + list.length + ' of ' + all.length + ' trophies</p>' +
-    '<ul class="trophy-list">' + list.map(rowFor).join('') + '</ul>';
-}
-function sourcePara(id) {
-  var s = srcById(id);
-  if (!s) return '<p>' + esc(id) + '</p>';
-  return '<p><strong>' + esc(s.label) + ' (' + esc(s.date) + '):</strong> ' + esc(s.covers) + '<br><span class="url">' + esc(s.url) + '</span></p>';
-}
-function showGuide(id) {
-  var t = byId(id);
-  if (!t) { view.innerHTML = '<h2>Trophy not found</h2><p><a href="#/">Back to the checklist</a></p>'; return; }
-  var stepList = (t.steps || []).map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('');
-  var tipList = (t.tips || []).map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('');
-  var srcList = (t.sources || []).map(sourcePara).join('');
-  var missBox = t.missable
-    ? '<div class="warn"><strong>When it can be missed:</strong> this trophy is flagged MISSABLE. No mission replay is confirmed for GTA VI, so do it when the chance appears. If you miss it, try replaying the mission from the pause menu.</div>'
-    : '<p><strong>When it can be missed:</strong> not flagged missable — it can be done at any time.</p>';
-  var prev = byId(id - 1);
-  var next = byId(id + 1);
-  view.innerHTML =
-    '<p class="back-link"><a href="#/">&larr; Back to the checklist</a></p>' +
-    '<article class="guide-pane">' +
-    '<h2>' + esc(displayName(t)) + '</h2>' +
-    '<div class="badges">' + tagSet(t) + '</div>' +
-    '<p class="desc">Official description: “' + esc(displayDesc(t)) + '”</p>' +
-    '<div class="answer-box"><p><strong>Cited answer:</strong> ' + esc(t.answer || t.guide) + '</p></div>' +
-    (t.target ? '<p><strong>Target:</strong> ' + esc(targetText(t)) + '</p>' + stepper(t) : '') +
-    '<h3>Guide</h3><p>' + esc(t.guide) + '</p>' +
-    (stepList ? '<h3>Cited steps (' + (t.steps || []).length + ')</h3><ol>' + stepList + '</ol>' : '') +
-    (tipList ? '<h3>Tips</h3><ul>' + tipList + '</ul>' : '') +
-    missBox +
-    '<h3>Your notes</h3><textarea class="notes" id="notes-box" placeholder="Your own notes for this trophy…">' + esc(state.notes[t.id] || '') + '</textarea>' +
-    '<div class="sources"><h4>Sources for this trophy</h4>' + srcList +
-    '<p>Guide text: our own advice from the official description and the sources above, not yet checked in the game.</p></div>' +
-    '<div class="pager"><span>' + (prev ? '<a href="#/trophy/' + prev.id + '">&larr; ' + esc(displayName(prev)) + '</a>' : '') + '</span>' +
-    '<span>' + (next ? '<a href="#/trophy/' + next.id + '">' + esc(displayName(next)) + ' &rarr;</a>' : '') + '</span></div>' +
-    '</article>';
-  var box = document.getElementById('notes-box');
-  box.addEventListener('input', function () { state.notes[t.id] = box.value; writeState(); });
-}
-function showRoadmap() {
-  var html = '<h2>Roadmap to the platinum</h2>' +
-    '<p class="lede">Four phases, in play order, built from the official trophy descriptions and PowerPyx’s roadmap (difficulty 4/10, about 200 hours, 1 playthrough, 0 online trophies). Finish the story first, then the stranger strands, then activities and exploration, then collectibles and the long grinds — the platinum pops last.</p>';
-  PHASES.forEach(function (ph) {
-    var items = ph.ids.map(byId).filter(Boolean);
-    var done = items.filter(earned).length;
-    var pct = items.length ? Math.round(done / items.length * 100) : 0;
-    html += '<section class="phase"><h3>' + esc(ph.name) + ' — ' + done + ' / ' + items.length + ' · ' + esc(ph.hours) + '</h3>' +
-      '<p>' + esc(ph.blurb) + '</p><div class="mini-bar"><div class="mini-fill" style="width:' + pct + '%"></div></div>' +
-      '<ul>' + items.map(function (t) {
-        return '<li class="' + (earned(t) ? 'earned' : '') + '"><a href="#/trophy/' + t.id + '">' + esc(displayName(t)) + '</a> ' + gradeTag(t) + ' ' + effortTag(t) + (t.missable ? ' <span class="badge missable">MISSABLE</span>' : '') + '</li>';
-      }).join('') + '</ul></section>';
-  });
-  view.innerHTML = html;
-}
-function showMissables() {
-  var list = all.filter(function (t) { return t.missable; });
-  view.innerHTML =
-    '<h2>Missable trophies</h2>' +
-    '<p class="lede">' + list.length + ' trophies are flagged missable. No mission replay is confirmed for GTA VI, so do each of these when its chance appears — and if you miss one, try replaying the mission from the pause menu.</p>' +
-    '<div class="warn"><strong>How strict is “missable”?</strong> PowerPyx and KeenGamer count only 1 trophy that can actually lock the platinum: Positive Mental Attitude, whose first meditation can only be done in Chapter 1. This guide flags all ' + list.length + ' one-time moments, because each can only be done when it appears. See disagreement 1 on the Sources page.</div>' +
-    '<ul class="trophy-list">' + list.map(rowFor).join('') + '</ul>';
-}
-function showSources() {
-  var head = '<tr><th>Trophy</th>' + sources.map(function (s) { return '<th>' + esc(s.id) + '</th>'; }).join('') + '</tr>';
-  var rows = all.map(function (t) {
-    var cells = sources.map(function (s) {
-      var hit = (t.sources || []).indexOf(s.id) !== -1;
-      return '<td class="' + (hit ? 'hit' : '') + '">' + (hit ? '●' : '·') + '</td>';
-    }).join('');
-    return '<tr><td>' + esc(displayName(t)) + '</td>' + cells + '</tr>';
-  }).join('');
-  var srcItems = sources.map(function (s) {
-    return '<li><strong>' + esc(s.id) + ' — ' + esc(s.label) + ' (' + esc(s.date) + ')</strong><br>' + esc(s.covers) + '<br><span class="url">' + esc(s.url) + '</span></li>';
-  }).join('');
-  var disputeHtml = disputes.map(function (d) {
-    return '<div class="dispute"><h4>' + d.n + '. ' + esc(d.topic) + '</h4>' +
-      '<p><strong>Side A:</strong> ' + esc(d.a) + '</p>' +
-      '<p><strong>Side B:</strong> ' + esc(d.b) + '</p>' +
-      '<p class="call">Call: ' + esc(d.call) + '</p></div>';
-  }).join('');
-  view.innerHTML =
-    '<h2>Sources &amp; matrix</h2>' +
-    '<p class="lede">' + sources.length + ' dated sources. Every step in every guide names the source it comes from; a step no source pins down says so instead of guessing. The matrix shows which sources back each trophy.</p>' +
-    '<h3>Source matrix — trophies × sources</h3>' +
-    '<p class="matrix-legend">● = this source backs the trophy. S1 Exophase · S2 PSNProfiles · S3 PowerPyx · S4 Insider Gaming · S5 KeenGamer · S6 GTA Spotter · S7 GTA Six Insider · S8 Vice City Hustle · S9 Take-Two / Rockstar · S10 Rockstar Games.</p>' +
-    '<div class="matrix-wrap"><table class="matrix">' + head + rows + '</table></div>' +
-    '<h3>Disagreements — where the sources differ</h3>' + disputeHtml +
-    '<h3>All sources (dated, checked ' + esc(checkedOn) + ')</h3>' +
-    '<ul class="source-list">' + srcItems + '</ul>';
-}
-function showPlanner() {
-  var left = all.filter(function (t) { return !earned(t); });
-  var easiest = left.slice().sort(function (a, b) { return (a.difficulty - b.difficulty) || (a.phase - b.phase) || (a.id - b.id); }).slice(0, 5);
-  var closest = left.filter(function (t) { return t.target; }).map(function (t) {
-    return { t: t, frac: Math.min(1, countOf(t) / t.target.count) };
-  }).sort(function (a, b) { return b.frac - a.frac; }).slice(0, 3);
-  view.innerHTML =
-    '<h2>Next up — your planner</h2>' +
-    '<p class="lede">The five easiest trophies you still need, and the three you are closest to finishing. Start at the top and work down.</p>' +
-    '<section class="planner-card"><h3>Five easiest un-earned trophies</h3><ol>' +
-    easiest.map(function (t) { return '<li><a href="#/trophy/' + t.id + '">' + esc(displayName(t)) + '</a> — ' + starRow(t.difficulty) + ' ' + esc(t.time || '') + ', phase ' + t.phase + ' ' + gradeTag(t) + '</li>'; }).join('') +
-    '</ol></section>' +
-    '<section class="planner-card"><h3>Closest to done (by target progress)</h3><ol>' +
-    (closest.length ? closest.map(function (c) { return '<li><a href="#/trophy/' + c.t.id + '">' + esc(displayName(c.t)) + '</a> — ' + esc(targetText(c.t)) + ' (' + Math.round(c.frac * 100) + '%)</li>'; }).join('') : '<li>No target trophies started yet — pick one from the checklist and use its counter.</li>') +
-    '</ol></section>';
-}
-function showSave() {
-  var done = all.filter(earned).length;
-  var left = all.length - done;
-  var effort = all.filter(function (t) { return !earned(t); }).reduce(function (sum, t) { return sum + t.difficulty; }, 0);
-  view.innerHTML =
-    '<h2>Save &amp; settings</h2>' +
-    '<p class="lede">Your progress is saved in this browser (localStorage). Export it to a file as a backup, and import it back on another device or after clearing browser data.</p>' +
-    '<div class="save-grid">' +
-    '<section class="save-card"><h3>Your stats</h3><p>Earned: ' + done + ' / ' + all.length + '</p><p>Remaining: ' + left + '</p><p>Estimated remaining effort: ' + effort + ' difficulty points (sum of the difficulty of every un-earned trophy, 1–5 each)</p><p>Cited steps in this guide: ' + totalSteps() + ' across ' + sources.length + ' dated sources.</p></section>' +
-    '<section class="save-card"><h3>Export / import</h3>' +
-    '<p><button class="btn" type="button" id="export-btn">Export progress (JSON)</button></p>' +
-    '<p><label>Import progress: <input type="file" id="import-file" accept="application/json,.json"></label></p>' +
-    '<p id="import-msg"></p></section>' +
-    '<section class="save-card"><h3>Settings</h3>' +
-    '<p><label class="check"><input type="checkbox" id="save-spoiler" ' + (state.hideSpoilers ? 'checked' : '') + '> Hide hidden trophies (spoiler setting)</label></p>' +
-    '<p><button class="btn ghost" type="button" id="save-theme">Switch to ' + (state.theme === 'night' ? 'paper' : 'night') + ' theme</button></p>' +
-    '<p><button class="btn ghost" type="button" id="reset-btn">Reset all progress</button></p></section>' +
-    '<section class="save-card"><h3>Sources &amp; honesty</h3>' +
-    '<p>Official list: Exophase and PSNProfiles; roadmap and counts: PowerPyx, Insider Gaming, KeenGamer, GTA Spotter, GTA Six Insider, Vice City Hustle; launch: Rockstar Games / Take-Two. Full dated list on the Sources &amp; Matrix page.</p>' +
-    '<p>List make-up: 55 trophies — 1 platinum, 2 gold, 6 silver, 46 bronze, 28 hidden.</p>' +
-    '<p>GTA VI launched 19 Nov 2026. Every guide here is written from the official trophy descriptions and the dated sources above. Where a location or step is not pinned down by a source, the guide says so instead of guessing.</p></section>' +
-    '</div>';
-  document.getElementById('export-btn').addEventListener('click', exportFile);
-  document.getElementById('import-file').addEventListener('change', importFile);
-  document.getElementById('save-spoiler').addEventListener('change', function (e) {
-    state.hideSpoilers = e.target.checked;
-    document.getElementById('spoiler-toggle').checked = state.hideSpoilers;
-    writeState(); route();
-  });
-  document.getElementById('save-theme').addEventListener('click', function () {
-    state.theme = state.theme === 'night' ? 'paper' : 'night';
-    writeState(); paintTheme(); route();
-  });
-  document.getElementById('reset-btn').addEventListener('click', function () {
-    if (window.confirm('Reset all progress, counters and notes?')) {
-      state = blankState();
-      document.getElementById('spoiler-toggle').checked = state.hideSpoilers;
-      writeState(); paintTheme(); paintHeader(); route();
-    }
-  });
-}
-function exportFile() {
-  var blob = new Blob([JSON.stringify({ app: 'gta6-trophy-guide', version: 2, earned: state.earned, progress: state.progress, notes: state.notes }, null, 2)], { type: 'application/json' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'gta6-trophy-progress.json';
-  a.click();
-  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
-}
-function importFile(e) {
-  var file = e.target.files && e.target.files[0];
-  var msg = document.getElementById('import-msg');
-  if (!file) return;
-  var reader = new FileReader();
-  reader.onload = function () {
-    try {
-      var data = JSON.parse(reader.result);
-      if (data.earned) state.earned = data.earned;
-      if (data.progress) state.progress = data.progress;
-      if (data.notes) state.notes = data.notes;
-      writeState(); paintHeader(); route();
-      msg.textContent = 'Imported progress from ' + file.name + '.';
-    } catch (err) { msg.textContent = 'That file could not be read as progress JSON.'; }
+  "use strict";
+  var KEY = "gta6-trophy-guide-v1";
+  var DEMO_EARNED = [2, 3, 8, 10, 16, 20, 21, 33, 44, 46, 47, 51, 55];
+  var DEMO_PROGRESS = { 15: 87, 35: 41 };
+  var PHASES = [
+    { n: 1, name: "Story first", time: "60–80 h", blurb: "Play chapters 1–5 and grab the one-time moments as they come." },
+    { n: 2, name: "Strangers & side stories", time: "10–20 h", blurb: "Stranger strands and side missions." },
+    { n: 3, name: "Activities & exploration", time: "60–80 h", blurb: "Activities, exploration and the open map." },
+    { n: 4, name: "Collectibles, grind & cleanup", time: "40–60 h", blurb: "Cards, WAiNK, challenges, money — then the platinum." }
+  ];
+  var TIMES = {
+    1: "200 h total", 2: "story", 3: "story", 4: "story", 5: "story", 6: "story", 7: "story",
+    8: "story", 9: "story", 10: "story", 11: "story", 12: "story", 13: "story",
+    14: "100 h", 15: "5–10 h", 16: "1 h", 17: "5–10 h", 18: "2–4 h", 19: "3–6 h",
+    20: "30 min", 21: "30 min", 22: "30 min–1 h", 23: "30 min–1 h", 24: "30 min–1 h",
+    25: "10–20 h", 26: "30 min–1 h", 27: "30 min–1 h", 28: "2–4 h", 29: "30 min–1 h",
+    30: "5–10 h", 31: "5–10 h", 32: "10–20 h", 33: "minutes", 34: "minutes",
+    35: "3–6 h", 36: "30 min", 37: "minutes", 38: "minutes", 39: "minutes",
+    40: "2–4 h", 41: "30 min", 42: "5–10 h", 43: "2–4 h", 44: "minutes",
+    45: "minutes", 46: "minutes", 47: "minutes", 48: "as you play", 49: "minutes",
+    50: "minutes", 51: "minutes", 52: "5–10 h", 53: "as you play", 54: "2–4 h", 55: "1 h"
   };
-  reader.readAsText(file);
-}
-function markTab(name) {
-  var tabs = document.querySelectorAll('#tabs a');
-  tabs.forEach(function (a) { a.classList.toggle('active', a.getAttribute('data-view') === name); });
-}
-function route() {
-  var hash = window.location.hash || '#/';
-  var toolbar = document.getElementById('toolbar');
-  var m = hash.match(/^#\/trophy\/(\d+)$/);
-  if (m) {
-    toolbar.style.display = 'none';
-    markTab('checklist');
-    showGuide(Number(m[1]));
-  } else if (hash === '#/roadmap') {
-    toolbar.style.display = 'none';
-    markTab('roadmap');
-    showRoadmap();
-  } else if (hash === '#/missables') {
-    toolbar.style.display = 'none';
-    markTab('missables');
-    showMissables();
-  } else if (hash === '#/sources') {
-    toolbar.style.display = 'none';
-    markTab('sources');
-    showSources();
-  } else if (hash === '#/planner') {
-    toolbar.style.display = 'none';
-    markTab('planner');
-    showPlanner();
-  } else if (hash === '#/save') {
-    toolbar.style.display = 'none';
-    markTab('save');
-    showSave();
-  } else {
-    toolbar.style.display = 'flex';
-    markTab('checklist');
-    showChecklist();
-  }
-  paintHeader();
-}
-function wireControls() {
-  var kinds = [];
-  all.forEach(function (t) { if (kinds.indexOf(t.kind) === -1) kinds.push(t.kind); });
-  kinds.sort();
-  var sel = document.getElementById('filter-kind');
-  kinds.forEach(function (k) {
-    var o = document.createElement('option');
-    o.value = k; o.textContent = KIND_NAMES[k] || k;
-    sel.appendChild(o);
-  });
-  document.getElementById('search').addEventListener('input', showChecklist);
-  document.getElementById('filter-grade').addEventListener('change', showChecklist);
-  document.getElementById('filter-kind').addEventListener('change', showChecklist);
-  document.getElementById('filter-status').addEventListener('change', showChecklist);
-  document.getElementById('filter-missable').addEventListener('change', showChecklist);
-  document.getElementById('spoiler-toggle').addEventListener('change', function (e) {
-    state.hideSpoilers = e.target.checked; writeState(); route();
-  });
-  document.getElementById('theme-toggle').addEventListener('click', function () {
-    state.theme = state.theme === 'night' ? 'paper' : 'night';
-    writeState(); paintTheme();
-  });
-  document.getElementById('spoiler-toggle').checked = state.hideSpoilers;
-  view.addEventListener('change', function (e) {
-    var earn = e.target.getAttribute && e.target.getAttribute('data-earn');
-    if (earn) {
-      var id = Number(earn);
-      if (e.target.checked) state.earned[id] = true; else delete state.earned[id];
-      writeState(); route();
+  var KIND_LABELS = { platinum: "Platinum", story: "Story", mission: "Mission", completion: "Completion", activity: "Activity", side: "Side", collectible: "Collectible", coop: "Co-op", combat: "Combat", misc: "Misc", exploration: "Exploration", money: "Money" };
+
+  var DATA = null;
+  var state = loadState();
+  var view = document.getElementById("view");
+  var revealed = {}; // hidden trophies the user chose to reveal in this session
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (e) { /* corrupted save: start fresh */ }
+    var fresh = { earned: {}, progress: {}, notes: {}, theme: "paper", spoiler: true };
+    if (new URLSearchParams(location.search).get("demo") === "1") {
+      DEMO_EARNED.forEach(function (id) { fresh.earned[id] = true; });
+      fresh.progress = { 15: 87, 35: 41 };
     }
-  });
-  view.addEventListener('click', function (e) {
-    var btn = e.target.closest ? e.target.closest('[data-step]') : null;
-    if (!btn) return;
-    var id = Number(btn.getAttribute('data-id'));
+    return fresh;
+  }
+  function saveState() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* storage full/blocked */ }
+  }
+  function esc(s) {
+    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function byId(id) { return DATA.trophies.find(function (t) { return t.id === id; }); }
+  function srcById(id) { return DATA.sources.find(function (s) { return s.id === id; }); }
+  function srcTags(ids) {
+    return (ids || []).map(function (id) { return "<b>S" + id + "</b>"; }).join(", ");
+  }
+  function countClaims() {
+    var total = 0, two = 0;
+    DATA.trophies.forEach(function (t) {
+      ["steps", "prose", "tips"].forEach(function (k) {
+        (t[k] || []).forEach(function (it) {
+          if (it.s && it.s.length) { total++; if (it.s.length >= 2) two++; }
+        });
+      });
+    });
+    return { total: total, two: two };
+  }
+  function earnedCount() {
+    return DATA.trophies.filter(function (t) { return state.earned[t.id]; }).length;
+  }
+  function applyTheme() {
+    document.documentElement.setAttribute("data-theme", state.theme === "night" ? "night" : "paper");
+    var b = document.getElementById("themeBtn");
+    if (b) { b.textContent = state.theme === "night" ? "Paper" : "Night"; b.setAttribute("aria-pressed", state.theme === "night" ? "true" : "false"); }
+  }
+  function applySpoilerBtn() {
+    var b = document.getElementById("spoilerBtn");
+    if (b) { b.textContent = state.spoiler ? "Show hidden" : "Hide hidden"; b.setAttribute("aria-pressed", state.spoiler ? "true" : "false"); }
+  }
+
+  /* ---------- shared bits ---------- */
+  function gradeBadge(t) {
+    return '<span class="badge ' + t.grade + '">' + t.grade + '</span>';
+  }
+  function stepper(t) {
+    if (!t.target) return "";
+    var cur = state.progress[t.id] || 0;
+    var unit = t.target.unit === "$" ? "$" : "";
+    var label = unit ? unit + cur.toLocaleString() + " / " + unit + t.target.count.toLocaleString()
+      : cur + " / " + t.target.count + (t.target.unit && t.target.unit !== "%" ? " " + t.target.unit : t.target.unit === "%" ? "%" : "");
+    return '<span class="stepper"><button type="button" data-step="-1" data-id="' + t.id + '" aria-label="Decrease progress">−</button><b>' + esc(label) + '</b><button type="button" data-step="1" data-id="' + t.id + '" aria-label="Increase progress">+</button></span>';
+  }
+  function trophyRow(t, opts) {
+    opts = opts || {};
+    var hidden = t.hidden && state.spoiler && !revealed[t.id] && !opts.reveal;
+    var name = hidden ? "Hidden trophy" : esc(t.name);
+    var desc = hidden ? "Hidden until revealed — turn off the spoiler setting to see it." : esc(t.description);
+    var badges = gradeBadge(t)
+      + '<span class="badge">' + esc(KIND_LABELS[t.kind] || t.kind) + '</span>'
+      + '<span class="badge diff">Difficulty ' + t.difficulty + '/5</span>'
+      + (t.missable ? '<span class="badge missable">Missable</span>' : "")
+      + (t.hidden ? '<span class="badge hidden">Hidden</span>' : "")
+      + (TIMES[t.id] && TIMES[t.id] !== "story" ? '<span class="badge">' + esc(TIMES[t.id]) + '</span>' : "");
+    var checked = state.earned[t.id] ? " checked" : "";
+    return '<div class="trow' + (state.earned[t.id] ? " earned" : "") + '" data-open="' + t.id + '">'
+      + '<input type="checkbox" class="check" data-earn="' + t.id + '"' + checked + ' aria-label="Mark ' + name + ' earned">'
+      + '<div class="body"><div class="name">' + name + '</div><div class="desc">' + desc + '</div><div class="meta">' + badges + '</div></div>'
+      + stepper(t) + "</div>";
+  }
+  function statCards() {
+    var c = countClaims();
+    return '<div class="statgrid">'
+      + '<div class="stat"><b>' + c.total + '</b><span>cited claims in the guide</span></div>'
+      + '<div class="stat"><b>' + c.two + '</b><span>claims backed by 2+ sources</span></div>'
+      + '<div class="stat"><b>' + DATA.sources.length + '</b><span>dated sources, checked 21 Nov 2026</span></div>'
+      + '<div class="stat"><b>' + DATA.disputes.length + '</b><span>disagreements logged</span></div>'
+      + '<div class="stat"><b>21 Nov 2026</b><span>last checked</span></div>'
+      + "</div>";
+  }
+
+  /* ---------- views ---------- */
+  function renderChecklist() {
+    var q = (renderChecklist.q || "").toLowerCase();
+    var grade = renderChecklist.grade || "all";
+    var kind = renderChecklist.kind || "all";
+    var status = renderChecklist.status || "all";
+    var missOnly = !!renderChecklist.missOnly;
+    var total = DATA.trophies.length, done = earnedCount();
+    var byGrade = {};
+    DATA.trophies.forEach(function (t) {
+      byGrade[t.grade] = byGrade[t.grade] || { done: 0, total: 0 };
+      byGrade[t.grade].total++;
+      if (state.earned[t.id]) byGrade[t.grade].done++;
+    });
+    var gradeLine = ["platinum", "gold", "silver", "bronze"].map(function (g) {
+      return g + " " + (byGrade[g] ? byGrade[g].done : 0) + "/" + (byGrade[g] ? byGrade[g].total : 0);
+    }).join(" · ");
+    var kinds = Object.keys(KIND_LABELS).filter(function (k) { return DATA.trophies.some(function (t) { return t.kind === k; }); });
+    var list = DATA.trophies.filter(function (t) {
+      if (grade !== "all" && t.grade !== grade) return false;
+      if (kind !== "all" && t.kind !== kind) return false;
+      if (status === "earned" && !state.earned[t.id]) return false;
+      if (status === "not" && state.earned[t.id]) return false;
+      if (missOnly && !t.missable) return false;
+      if (q && (t.name + " " + t.description).toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    });
+    var html = '<div class="card"><h2>Checklist — all 55 trophies</h2>'
+      + '<p class="muted">Official list: 1 platinum, 2 gold, 6 silver, 46 bronze, 28 hidden. '
+      + 'Every step, sentence and tip in this guide carries its sources — nothing here is an uncited guess.</p>'
+      + statCards()
+      + '<div class="progress" role="progressbar" aria-valuenow="' + done + '" aria-valuemax="' + total + '"><i style="width:' + Math.round(done / total * 100) + '%"></i></div>'
+      + '<p><b>' + done + ' / ' + total + ' earned</b> <span class="muted">· ' + esc(gradeLine) + '</span></p>'
+      + '<div class="filters"><input type="search" id="q" placeholder="Search trophies…" value="' + esc(renderChecklist.q || "") + '">'
+      + '<select id="fGrade" aria-label="Filter by grade"><option value="all">All grades</option>'
+      + ["platinum", "gold", "silver", "bronze"].map(function (g) { return '<option value="' + g + '"' + (grade === g ? " selected" : "") + ">" + g + "</option>"; }).join("") + "</select>"
+      + '<select id="fKind" aria-label="Filter by kind"><option value="all">All kinds</option>'
+      + kinds.map(function (k) { return '<option value="' + k + '"' + (kind === k ? " selected" : "") + ">" + esc(KIND_LABELS[k]) + "</option>"; }).join("") + "</select>"
+      + '<select id="fStatus" aria-label="Filter by status"><option value="all">All</option>'
+      + '<option value="earned"' + (status === "earned" ? " selected" : "") + '>Earned</option>'
+      + '<option value="not"' + (status === "not" ? " selected" : "") + '>Not earned</option></select>'
+      + '<label><input type="checkbox" id="fMiss"' + (missOnly ? " checked" : "") + '> Missable only</label>'
+      + "</div></div>";
+    if (!list.length) html += '<div class="card"><p class="muted">No trophies match these filters.</p></div>';
+    list.forEach(function (t) { html += trophyRow(t); });
+    view.innerHTML = html;
+    document.getElementById("q").addEventListener("input", function (e) { renderChecklist.q = e.target.value; rerender(false); });
+    document.getElementById("fGrade").addEventListener("change", function (e) { renderChecklist.grade = e.target.value; rerender(false); });
+    document.getElementById("fKind").addEventListener("change", function (e) { renderChecklist.kind = e.target.value; rerender(false); });
+    document.getElementById("fStatus").addEventListener("change", function (e) { renderChecklist.status = e.target.value; rerender(false); });
+    document.getElementById("fMiss").addEventListener("change", function (e) { renderChecklist.missOnly = e.target.checked; rerender(false); });
+    var qi = document.getElementById("q");
+    if (renderChecklist.q) { qi.focus(); qi.setSelectionRange(qi.value.length, qi.value.length); }
+  }
+
+  function renderGuide(id) {
     var t = byId(id);
-    if (!t || !t.target) return;
-    var cur = countOf(t);
-    var next = Math.max(0, Math.min(t.target.count, cur + Number(btn.getAttribute('data-step'))));
-    state.progress[id] = next;
-    writeState(); route();
+    if (!t) { view.innerHTML = '<div class="card"><p>Unknown trophy.</p><a class="backlink" href="#/">← Back to checklist</a></div>'; return; }
+    var hidden = t.hidden && state.spoiler && !revealed[t.id];
+    var srcList = (t.sources || []).map(function (sid) {
+      var s = srcById(sid);
+      if (!s) return "";
+      return "<li><b>" + esc(s.label) + "</b> — " + esc(s.covers) + "<br><span class='url'>" + esc(s.url) + "</span> <span class='muted'>(checked " + esc(s.checked) + ")</span></li>";
+    }).join("");
+    var disputeLinks = (t.disputeIds || []).map(function (did) {
+      var d = DATA.disputes.find(function (x) { return x.id === did; });
+      if (!d) return "";
+      return '<li><a href="#/save">Dispute D' + d.id + ": " + esc(d.topic) + '</a> — this guide follows: ' + esc(d.follows) + "</li>";
+    }).join("");
+    var html = '<a class="backlink" href="#/">← Back to checklist</a><div class="card">'
+      + '<div class="guide-head"><div style="flex:1"><h2>' + (hidden ? "Hidden trophy" : esc(t.name)) + '</h2>'
+      + '<p class="muted">' + (hidden ? "Hidden until revealed." : esc(t.description)) + "</p></div>"
+      + '<div>' + gradeBadge(t) + ' <span class="badge diff">Difficulty ' + t.difficulty + '/5</span>'
+      + (TIMES[t.id] && TIMES[t.id] !== "story" ? ' <span class="badge">' + esc(TIMES[t.id]) + '</span>' : "")
+      + (t.missable ? ' <span class="badge missable">Missable</span>' : "")
+      + (t.hidden ? ' <span class="badge hidden">Hidden</span>' : "") + "</div></div>";
+    if (hidden) {
+      html += '<p>This is a hidden trophy and your spoiler setting is on. <button class="btn" type="button" id="revealBtn">Reveal this trophy</button></p></div>';
+      view.innerHTML = html;
+      document.getElementById("revealBtn").addEventListener("click", function () { revealed[t.id] = true; rerender(true); });
+      return;
+    }
+    html += '<div class="answer"><b>Short answer:</b> ' + esc(t.answer) + ' <span class="srcs">[' + srcTags(t.answerSrc) + "]</span></div>";
+    if (t.missable && t.missableNote) {
+      html += '<div class="missbox"><h4>⚠ When it can be missed</h4><p>' + esc(t.missableNote) + "</p></div>";
+    }
+    html += "<h3>Steps</h3><ol class='steps'>"
+      + (t.steps || []).map(function (s) { return "<li>" + esc(s.t) + ' <span class="srcs">[' + srcTags(s.s) + "]</span></li>"; }).join("") + "</ol>";
+    html += '<div class="srcblock"><h4>Sources for this trophy</h4><ul>' + srcList + "</ul>"
+      + '<p class="small muted">Guide text is our own advice written from the official description and the sources above — not copied from any guide, and not yet checked by playing the game.</p></div>';
+    if (disputeLinks) html += "<h3>Disputed — read before you trust this one</h3><ul class='tips'>" + disputeLinks + "</ul>";
+    html += "<h3>Tips</h3><ul class='tips'>"
+      + (t.tips || []).map(function (s) { return "<li>" + esc(s.t) + ' <span class="srcs">[' + srcTags(s.s) + "]</span></li>"; }).join("") + "</ul>";
+    html += "<h3>In short</h3><p>" + (t.prose || []).map(function (s) { return esc(s.t) + ' <span class="srcs">[' + srcTags(s.s) + "]</span>"; }).join(" ") + "</p>";
+    if (t.target) {
+      html += "<h3>Your progress</h3><p>" + stepper(t) + "</p>";
+    }
+    html += '<div class="notebox"><h3>Your notes</h3><textarea id="note" placeholder="e.g. where you found it, what worked…">' + esc(state.notes[t.id] || "") + '</textarea><p class="saved" id="noteSaved"></p></div>';
+    html += '<p><label><input type="checkbox" id="earnBox"' + (state.earned[t.id] ? " checked" : "") + '> Earned</label></p>';
+    html += "</div>";
+    view.innerHTML = html;
+    document.getElementById("note").addEventListener("input", function (e) {
+      state.notes[t.id] = e.target.value; saveState();
+      document.getElementById("noteSaved").textContent = "Saved in this browser.";
+    });
+    document.getElementById("earnBox").addEventListener("change", function (e) {
+      if (e.target.checked) state.earned[t.id] = true; else delete state.earned[t.id];
+      saveState();
+    });
+  }
+
+  function renderRoadmap() {
+    var html = '<div class="card"><h2>Roadmap — four phases</h2>'
+      + '<p class="muted">Estimates from the PowerPyx roadmap (story 60–80 h, checklist ~100 h, cleanup ~10 h). Phases overlap; the whole run is about 200 hours. Per-trophy times are rough — treat them as planning guesses, not promises.</p><div class="phase-strip">';
+    PHASES.forEach(function (p) {
+      var ts = DATA.trophies.filter(function (t) { return t.phase === p.n; });
+      var done = ts.filter(function (t) { return state.earned[t.id]; }).length;
+      html += '<div class="phase-cell"><b>Phase ' + p.n + " — " + esc(p.name) + "</b>"
+        + '<span class="t">' + ts.length + " trophies</span>"
+        + '<span class="ttime">' + esc(p.time) + "</span>"
+        + "<span>" + esc(p.blurb) + "</span><br><span>" + done + " / " + ts.length + " earned</span></div>";
+    });
+    html += "</div></div><div class='phase-list'>";
+    PHASES.forEach(function (p) {
+      var ts = DATA.trophies.filter(function (t) { return t.phase === p.n; }).sort(function (a, b) { return a.id - b.id; });
+      var done = ts.filter(function (t) { return state.earned[t.id]; }).length;
+      html += '<div class="card"><h3>Phase ' + p.n + " — " + esc(p.name) + " (" + done + "/" + ts.length + ")</h3>"
+        + '<div class="progress"><i style="width:' + Math.round(done / ts.length * 100) + '%"></i></div>';
+      ts.forEach(function (t) { html += trophyRow(t); });
+      html += "</div>";
+    });
+    view.innerHTML = html + "</div>";
+  }
+
+  function renderMissables() {
+    var ms = DATA.trophies.filter(function (t) { return t.missable; });
+    var done = ms.filter(function (t) { return state.earned[t.id]; }).length;
+    var html = '<div class="warnhead"><h2>Missables — do these when you see them</h2>'
+      + "<p><b>No mission replay is confirmed for GTA VI.</b> The trophies below are one-time moments: a co-op escape, a first-visit scene, a choice that cannot be unmade. "
+      + "If you pass one, the only rewind is a manual save from before it — keep one at the start and end of each chapter. "
+      + "The guides name only one possibly missable trophy (the Chapter 1 meditation); this guide flags 13 one-time moments as well, and says so plainly — see dispute D5 on the Save &amp; Sources page.</p>"
+      + "<p>" + done + " / " + ms.length + " missables earned.</p></div>";
+    ms.forEach(function (t) { html += trophyRow(t); });
+    view.innerHTML = html;
+  }
+
+  function renderPlanner() {
+    var un = DATA.trophies.filter(function (t) { return !state.earned[t.id]; });
+    var easiest = un.slice().sort(function (a, b) { return (a.difficulty - b.difficulty) || (a.phase - b.phase) || (a.id - b.id); }).slice(0, 5);
+    var withTarget = un.filter(function (t) { return t.target; });
+    var closest = withTarget.map(function (t) {
+      var cur = state.progress[t.id] || 0;
+      return { t: t, ratio: cur / t.target.count };
+    }).sort(function (a, b) { return (b.ratio - a.ratio) || (a.t.target.count - b.t.target.count); }).slice(0, 3);
+    var html = '<div class="card"><h2>Next Up — what to do first</h2><p class="muted">Five easiest trophies you have not earned yet, and the three you are closest to finishing.</p></div><div class="plan-col"><div class="card"><h3>5 easiest un-earned</h3>';
+    easiest.forEach(function (t) { html += trophyRow(t); });
+    html += '</div><div class="card"><h3>3 closest to done</h3>';
+    if (!closest.length) html += '<p class="muted">No target trophies left.</p>';
+    closest.forEach(function (c) { html += trophyRow(c.t); });
+    html += "</div></div>";
+    view.innerHTML = html;
+  }
+
+  function renderSave() {
+    var c = countClaims();
+    var html = '<div class="card"><h2>Save &amp; Sources</h2>'
+      + '<p class="muted">Progress lives in this browser (localStorage). Export a backup before clearing browser data.</p>'
+      + '<div class="btnrow"><button class="btn" type="button" id="exportBtn">Export progress (JSON)</button>'
+      + '<label class="btn ghost" for="importFile" style="cursor:pointer">Import progress (JSON)</label>'
+      + '<input type="file" id="importFile" accept="application/json" style="display:none">'
+      + '<button class="btn ghost" type="button" id="resetBtn">Reset progress</button></div>'
+      + '<p class="small" id="saveMsg"></p>'
+      + "<h3>Your stats</h3><p>" + earnedCount() + " / " + DATA.trophies.length + " trophies earned · " + c.total + " cited claims · " + c.two + " on 2+ sources · " + DATA.sources.length + " dated sources · " + DATA.disputes.length + " disputes logged.</p>"
+      + '<h3>Settings</h3><p><label><input type="checkbox" id="spoilerSet"' + (state.spoiler ? " checked" : "") + '> Hide hidden trophies (mask their names and descriptions)</label></p>'
+      + '<p><label>Theme: <select id="themeSet"><option value="paper"' + (state.theme !== "night" ? " selected" : "") + '>Paper</option><option value="night"' + (state.theme === "night" ? " selected" : "") + '>Night</option></select></label></p>'
+      + "</div>"
+      + '<div class="card"><h2>Sources &amp; honesty</h2>'
+      + "<p>GTA VI launched 19 November 2026. No trophy in this guide has been earned in the game by the guide's author; every step is written from the official trophy descriptions and the guides below. Where a location or step is not pinned down by any source, the guide says so instead of guessing. URLs are printed as plain text, not links.</p>"
+      + '<ol class="src-list">'
+      + DATA.sources.map(function (s) {
+          return "<li><b>S" + s.id + " — " + esc(s.label) + "</b><br>" + esc(s.covers) + "<br><span class='url'>" + esc(s.url) + "</span> <span class='muted'>(checked " + esc(s.checked) + ")</span></li>";
+        }).join("")
+      + "</ol><h3>Disagreements we found (20)</h3><p class='muted'>Where sources disagree, this guide follows one side and says which — the full reasoning is here, not hidden.</p>";
+    DATA.disputes.forEach(function (d) {
+      var links = (d.trophies || []).map(function (tid) {
+        var t = byId(tid);
+        return t ? '<a href="#/trophy/' + tid + '">' + esc(t.name) + "</a>" : "";
+      }).filter(Boolean).join(", ");
+      html += '<div class="dispute" id="dispute-' + d.id + '"><b>D' + d.id + " — " + esc(d.topic) + "</b>"
+        + "<p>A: " + esc(d.a) + "</p><p>B: " + esc(d.b) + "</p>"
+        + "<p><b>This guide follows:</b> " + esc(d.follows) + ". " + esc(d.why) + "</p>"
+        + (links ? "<p class='small'>Affects: " + links + "</p>" : "") + "</div>";
+    });
+    html += "</div>";
+    view.innerHTML = html;
+    document.getElementById("exportBtn").addEventListener("click", function () {
+      var blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "leonida-platinum-guide-progress.json";
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+      document.getElementById("saveMsg").textContent = "Exported.";
+    });
+    document.getElementById("importFile").addEventListener("change", function (e) {
+      var f = e.target.files[0];
+      if (!f) return;
+      var r = new FileReader();
+      r.onload = function () {
+        try {
+          var imp = JSON.parse(r.result);
+          if (imp && typeof imp === "object") {
+            state.earned = imp.earned || {}; state.progress = imp.progress || {}; state.notes = imp.notes || {};
+            if (imp.theme) state.theme = imp.theme;
+            if (typeof imp.spoiler === "boolean") state.spoiler = imp.spoiler;
+            saveState(); applyTheme(); applySpoilerBtn();
+            document.getElementById("saveMsg").textContent = "Imported — " + earnedCount() + " trophies earned.";
+            rerender(true);
+          }
+        } catch (err) { document.getElementById("saveMsg").textContent = "That file is not valid progress JSON."; }
+      };
+      r.readAsText(f);
+    });
+    document.getElementById("resetBtn").addEventListener("click", function () {
+      if (!confirm("Reset all earned trophies, counters and notes?")) return;
+      state.earned = {}; state.progress = {}; state.notes = {};
+      saveState();
+      document.getElementById("saveMsg").textContent = "Progress reset.";
+      rerender(true);
+    });
+    document.getElementById("spoilerSet").addEventListener("change", function (e) {
+      state.spoiler = e.target.checked; saveState(); applySpoilerBtn();
+    });
+    document.getElementById("themeSet").addEventListener("change", function (e) {
+      state.theme = e.target.value; saveState(); applyTheme();
+    });
+  }
+
+  /* ---------- router & events ---------- */
+  function route() {
+    var h = location.hash || "#/";
+    var parts = h.replace(/^#\/?/, "").split("/");
+    document.querySelectorAll(".mainnav a").forEach(function (a) {
+      var nav = a.getAttribute("data-nav");
+      var active = (parts[0] === "" && nav === "checklist") || parts[0] === nav
+        || (parts[0] === "trophy" && nav === "checklist");
+      a.classList.toggle("active", !!active);
+    });
+    if (parts[0] === "trophy" && parts[1]) renderGuide(parseInt(parts[1], 10));
+    else if (parts[0] === "roadmap") renderRoadmap();
+    else if (parts[0] === "missables") renderMissables();
+    else if (parts[0] === "planner") renderPlanner();
+    else if (parts[0] === "save") renderSave();
+    else renderChecklist();
+    window.scrollTo(0, 0);
+  }
+  var rerenderTimer = null;
+  function rerender(now) {
+    if (now) { route(); return; }
+    clearTimeout(rerenderTimer);
+    rerenderTimer = setTimeout(route, 250);
+  }
+  view.addEventListener("click", function (e) {
+    var step = e.target.closest("[data-step]");
+    if (step) {
+      e.stopPropagation();
+      var t = byId(parseInt(step.getAttribute("data-id"), 10));
+      if (!t || !t.target) return;
+      var cur = state.progress[t.id] || 0;
+      cur = Math.max(0, Math.min(t.target.count, cur + parseInt(step.getAttribute("data-step"), 10)));
+      state.progress[t.id] = cur;
+      if (cur >= t.target.count) state.earned[t.id] = true;
+      saveState();
+      rerender(true);
+      return;
+    }
+    var earn = e.target.closest("[data-earn]");
+    if (earn) {
+      e.stopPropagation();
+      var id = parseInt(earn.getAttribute("data-earn"), 10);
+      if (earn.checked) state.earned[id] = true; else delete state.earned[id];
+      saveState();
+      rerender(true);
+      return;
+    }
+    var row = e.target.closest("[data-open]");
+    if (row) { location.hash = "#/trophy/" + row.getAttribute("data-open"); }
   });
-  window.addEventListener('hashchange', route);
-}
-fetch('data/trophies.json').then(function (r) { return r.json(); }).then(function (data) {
-  all = data.trophies || data;
-  sources = data.sources || [];
-  disputes = data.disagreements || [];
-  if (data.audit && data.audit.last_checked) checkedOn = data.audit.last_checked;
-  demoSeed();
-  paintTheme();
-  wireControls();
-  route();
-}).catch(function () {
-  view.innerHTML = '<h2>Could not load the trophy data</h2><p>The file app/data/trophies.json could not be read. Serve the app/ folder with a static server and try again.</p>';
-});
+  document.getElementById("themeBtn").addEventListener("click", function () {
+    state.theme = state.theme === "night" ? "paper" : "night";
+    saveState(); applyTheme();
+  });
+  document.getElementById("spoilerBtn").addEventListener("click", function () {
+    state.spoiler = !state.spoiler;
+    saveState(); applySpoilerBtn();
+    rerender(true);
+  });
+  window.addEventListener("hashchange", route);
+
+  fetch("data/trophies.json").then(function (r) {
+    if (!r.ok) throw new Error("trophies.json not found");
+    return r.json();
+  }).then(function (d) {
+    DATA = d;
+    applyTheme(); applySpoilerBtn();
+    route();
+  }).catch(function (err) {
+    view.innerHTML = '<div class="card"><p>Could not load the trophy data (data/trophies.json). Serve this folder over HTTP — for example, run <code>node serve.ts</code> and open http://localhost:8080 — and reload.</p></div>';
+  });
 })();
